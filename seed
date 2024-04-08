@@ -1,0 +1,80 @@
+hyper_param = c("alpha0","alpha1","alpha2","alpha12","sigma")
+  "I" <- 
+    21
+  "r" <-
+    c(10, 23, 23, 26, 17, 5, 53, 55, 32, 46, 10, 8, 10, 8, 23, 0, 
+      3, 22, 15, 32, 3)
+  "n" <-
+    c(39, 62, 81, 51, 39, 6, 74, 72, 51, 79, 13, 16, 30, 28, 45, 
+      4, 12, 41, 30, 51, 7)
+  "x1" <-
+    c(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
+      1)
+  "x2" <-
+    c(0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 
+      1)
+  
+  r <- c(10, 23, 23, 26, 17, 5, 53, 55, 32, 46, 10, 8, 10, 8, 23, 0, 3, 22, 15, 32, 3)
+  n <- c(39, 62, 81, 51, 39, 6, 74, 72, 51, 79, 13, 16, 30, 28, 45, 4, 12, 41, 30, 51, 7)
+  
+  data <- data.frame(r = r, n = n,p = round(r/n,2))
+  
+  seed <- function(nchain, prop_sd, data, init = rep(1,length(hyper_param))){
+    nobs = nrow(data)
+    chain <- matrix(NA, nchain + 1,length(hyper_param))
+    chain[1,] <- init
+    
+    latent <- matrix(NA, nchain +1,nobs)
+    latent[1,] <- rep(0,nobs)
+    
+    acc_rate <- 0  
+    for (i in 1:nchain){
+      for (bi in 1:nobs) {
+        prop_bi <- rnorm(1, latent[i,bi], prop_sd)  
+        top_bi <- -prop_bi^2 / (2 * chain[i,5]) 
+        bottom_bi <- -latent[i,bi]^2 / (2 * chain[i,5])  
+        acc_prob_bi <- exp(top_bi - bottom_bi)
+        
+        #browser()
+        
+        if (runif(1) < acc_prob_bi) {
+          latent[i+1,bi] <- prop_bi
+          acc_rate <- acc_rate + 1
+        } else {
+          latent[i+1,bi] <- latent[i,bi]
+        }
+      }
+      
+      for (j in 1:4) {
+        
+        prop_log_alpha <- rnorm(1, log(chain[i,j]), prop_sd)
+        prop_alpha <- exp(prop_log_alpha)
+        prop_p<- 1 / (1 + exp(chain[i,1] + chain[i,2]*x1[bi] + chain[i,3]*x2[bi] + chain[i,4]*x1[bi]*x2[bi] + latent[i,j]))
+        top_alpha <- (-exp(prop_alpha)^2) / (2 * 10^6) + sum(r * log(prop_p) + (n-r) * log(1-prop_p))
+        bottom_alpha <- (-chain[i,j]^2) / (2 * 10^6) + sum(r * log(prop_p) + (n-r) * log(1-prop_p))
+        acc_prob_alpha <- exp(top_alpha - bottom_alpha)
+        
+        #print(paste('la valeur de top alpha:',top_alpha))
+        #print(paste('la valeur de prop p:',prop_p))
+        #print(paste('la valeur de prop alpha:',prop_alpha))
+        #print(paste('la valeur de bottom_alpha:',bottom_alpha))
+        if (runif(1) < acc_prob_alpha) {
+          chain[i+1,j] <- prop_alpha
+        } else {
+          chain[i+1,j] <- chain[i,j]
+        }
+      }
+      
+      b <- latent[i+1,]
+      r_sum <- sum(b^2) / 2
+      shape_cond <- 0.001 + 0.5 * length(b)  
+      rate_cond <- 0.001 + 0.5 * r_sum
+      sigma2 <- 1 / rgamma(1, shape_cond, rate_cond)
+      
+      chain[i+1,5] <- sigma2
+    }
+    
+    acc_rate <- acc_rate / (nchain * 21)  
+    
+    return(list(chain = chain, acc_rate = acc_rate))
+  }

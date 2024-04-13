@@ -1,0 +1,149 @@
+"I" <- 
+  21
+"r" <-
+  c(10, 23, 23, 26, 17, 5, 53, 55, 32, 46, 10, 8, 10, 8, 23, 0, 
+    3, 22, 15, 32, 3)
+"n" <-
+  c(39, 62, 81, 51, 39, 6, 74, 72, 51, 79, 13, 16, 30, 28, 45, 
+    4, 12, 41, 30, 51, 7)
+"x1" <-
+  c(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
+    1)
+"x2" <-
+  c(0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 
+    1)
+N<-I
+r <- c(10, 23, 23, 26, 17, 5, 53, 55, 32, 46, 10, 8, 10, 8, 23, 0, 3, 22, 15, 32, 3)
+n <- c(39, 62, 81, 51, 39, 6, 74, 72, 51, 79, 13, 16, 30, 28, 45, 4, 12, 41, 30, 51, 7)
+
+
+
+
+
+alpha0 <- dnorm(0,1.0e-6)
+alpha1 <- dnorm(0,1.0e-6)
+alpha2 <- dnorm(0,1.0e-6)
+alpha12 <- dnorm(0,1.0e-6)
+tau <- dgamma(0.001,0.001)
+sigma = 1/tau
+b <- rnorm(N,0,tau)
+
+hyper_param = c("alpha0","alpha1","alpha2","alpha12","sigma")
+
+
+
+
+seed <- function(nchain,burnin, prop_sd,r,n,x1,x2, init,b,init_b,N) {
+  chain <- matrix(NA, nchain + 1,length(hyper_param))
+  chain_b <- matrix(NA, nchain +1,N)
+  chain[1,] <- init
+  chain_b[1,] <- init_b
+  
+  alpha0 <- chain[1, 1]
+  alpha1 <- chain[1, 2]
+  alpha2 <- chain[1, 3]
+  alpha12 <- chain[1, 4]
+  sigma <- chain[1, 5]
+  
+  b <- chain_b[1,]
+  for (i in 1:nchain){
+    p <- sigmoid(chain[i, 1] + chain[i, 2] * x1 + chain[i, 3] * x2 + chain[i, 4] * x1 * x2 + chain_b[i, ])
+  
+    R<- sum(dbinom(r, size = n, prob = p, log = TRUE))
+    
+    # Update alpha0
+    prop_alpha0 <- rlnorm(1, mean = log(chain[i, 1]), sd = prop_sd[1])
+    new_p <- sigmoid(prop_alpha0 + chain[i, 2] * x1 + chain[i, 3] * x2 + chain[i, 4] * x1 * x2 + chain_b[i, ])
+    new_R <- sum(dbinom(r, size = n, prob = new_p, log = TRUE))
+    #maj alpha0
+    prop_alpha00 = rlnorm(1,mean=log(chain[i,1]),sd = prop_sd[1])
+    prop_alpha0=exp(prop_alpha00)
+    top_alpha0 <- (-prop_alpha0^2 / (2 * 10^6)) + sum(new_R * log(prop_alpha0) + (n-new_R) * log(1-new_p))
+    bottom_alpha0 <- (-alpha0^2 / (2 * 10^6)) + sum(R * log(chain[i,1]) + (n-R) * log(1-p))
+  
+    acc_prob_alpha0 = min(1,exp(top_alpha0 - bottom_alpha0)*(prop_alpha0/chain[i,1]))
+
+    if (runif(1)< acc_prob_alpha0){
+      alpha0 = prop_alpha0
+    }
+    chain[i+1,1] = alpha0
+    
+    #maj alpha1
+    prop_alpha11 = rlnorm(1,log(chain[i,2]),prop_sd[2])
+    
+    prop_alpha1=exp(prop_alpha11)
+    new_p <- sigmoid(chain[i,1] + prop_alpha1 * x1 + chain[i, 3] * x2 + chain[i, 4] * x1 * x2 + chain_b[i, ])
+    new_R <- sum(dbinom(r, size = n, prob = new_p, log = TRUE))
+    top_alpha1 <- (-prop_alpha1^2 / (2 * 10^6)) + sum(new_R * log(prop_alpha0) + (n-new_R) * log(1-new_p))
+    bottom_alpha1 <- (-chain[i,2]^2 / (2 * 10^6)) + sum(R * log(chain[i,2]) + (n-R) * log(1-p))
+    acc_prob_alpha1 = exp(top_alpha1 - bottom_alpha1)*prop_alpha1/chain[i,2]
+    
+    if (runif(1)< acc_prob_alpha1){
+      alpha1 = prop_alpha1
+    }
+    chain[i+1,2] = alpha1
+    
+    #maj alpha2
+    prop_alpha22 = rlnorm(1,log(chain[i,3]),prop_sd[3])
+    
+    prop_alpha2=exp(prop_alpha22)
+    new_p <- sigmoid(chain[i,1] + chain[i,2] * x1 + prop_alpha2 * x2 + chain[i, 4] * x1 * x2 + chain_b[i, ])
+    new_R <- sum(dbinom(r, size = n, prob = new_p, log = TRUE))
+    top_alpha2 <- (-prop_alpha2^2 / (2 * 10^6)) + sum(new_R * log(prop_alpha2) + (n-new_R) * log(1-new_p))
+    bottom_alpha2 <- (-chain[i,3]^2 / (2 * 10^6)) + sum(R * log(chain[i,3]) + (n-R) * log(1-p))
+    acc_prob_alpha2 = exp(top_alpha2 - bottom_alpha2)*prop_alpha2/chain[i,3]
+    
+    if (runif(1)< acc_prob_alpha2){
+      alpha2 = prop_alpha2
+    }
+    chain[i+1,3] = alpha2    
+    
+    #maj alpha12
+    prop_alpha121 = rlnorm(1,log(chain[i,4]),prop_sd[4])
+    prop_alpha12=exp(prop_alpha121)
+    new_p <- sigmoid(chain[i,1] + chain[i,2] * x1 + chain[i,3] * x2 + prop_alpha12 * x1 * x2 + chain_b[i, ])
+    new_R <- sum(dbinom(r, size = n, prob = new_p, log = TRUE))
+    top_alpha12 <- (-prop_alpha12^2 / (2 * 10^6)) + sum(new_R * log(prop_alpha12) + (n-new_R) * log(1-new_p))
+    bottom_alpha12 <- (-chain[i,4]^2 / (2 * 10^6)) + sum(R * log(chain[i,4]) + (n-R) * log(1-p))
+    acc_prob_alpha12 = exp(top_alpha12 - bottom_alpha12)*prop_alpha12/chain[i,4]
+    
+    if (runif(1)< acc_prob_alpha12){
+      alpha12 = prop_alpha12
+    }
+    chain[i+1,4] = alpha12
+    
+    
+    
+    for (j in 1:N){
+      #maj b
+      prop_b = rnorm(1,chain_b[i,j],prop_sd[5])
+      new_p <- sigmoid(chain[i,1] + chain[i,2] * x1 + chain[i,3] * x2 + chain[i,4] * x1 * x2 + prop_b)
+      new_R <- sum(dbinom(r[j], size = n[j], prob = new_p, log = TRUE))
+      R<- dbinom(r[k], size = n[k], prob = p[k], log = TRUE)
+      top_b <- -(prop_b^2 / (2 * sigma^2)) + new_R * log(new_p) + (n-new_R)*log(1-new_p)
+      bottom_b <- -(chain_b[i,j]^2 / (2 * sigma^2)) + R * log(p) + (n-R)*log(1-p)
+      acc_prob_b = exp(top_b - bottom_b)
+      if (runif(1)< acc_prob_b[j]){
+        b[j] = prop_b
+      }
+      chain_b[i+1,] = b
+      
+    }
+    
+    #maj sigma
+    shape_cond <- 0.001 + 0.5 * I  
+    rate_cond <- 0.001 + 0.5 * sum(b^2)
+    tau = rgamma(1, shape = shape_cond, scale = rate_cond)
+    sigma2 <- 1 / sqrt(tau)
+    
+    chain[i+1,5] <- sigma2 
+    
+  }
+  
+  
+  chain <- chain[burnin:nrow(chain), ]
+  
+  chain_b <- chain_b[burnin:nrow(chain), ]
+  
+  return(list(chain = chain, chain_b = chain_b))
+}

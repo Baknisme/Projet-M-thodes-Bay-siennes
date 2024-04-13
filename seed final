@@ -1,0 +1,142 @@
+alpha0 <- 0
+alpha1 <- 0
+alpha2 <- 0
+alpha12 <- 0
+tau <- 10
+sigma = 1/tau
+b <- c(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+       0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+       0)
+
+hyper_param = c("alpha0","alpha1","alpha2","alpha12","sigma")
+
+"I" <- 
+  21
+"r" <-
+  c(10, 23, 23, 26, 17, 5, 53, 55, 32, 46, 10, 8, 10, 8, 23, 0, 
+    3, 22, 15, 32, 3)
+"n" <-
+  c(39, 62, 81, 51, 39, 6, 74, 72, 51, 79, 13, 16, 30, 28, 45, 
+    4, 12, 41, 30, 51, 7)
+"x1" <-
+  c(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
+    1)
+"x2" <-
+  c(0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 
+    1)
+x2[6]
+r <- c(10, 23, 23, 26, 17, 5, 53, 55, 32, 46, 10, 8, 10, 8, 23, 0, 3, 22, 15, 32, 3)
+n <- c(39, 62, 81, 51, 39, 6, 74, 72, 51, 79, 13, 16, 30, 28, 45, 4, 12, 41, 30, 51, 7)
+
+calcul_r <- function(alpha0, alpha1, alpha12, alpha2, x1, x2, b, r, n, N) {
+  R <- 0
+  for (i in 1:N) {
+    R <- R + r[i]*log(plogis(alpha0 + alpha1*x1[i] + alpha2*x2[i] + alpha12*x1[i]*x2[i] + b[i])) +
+      (n[i] - r[i])*log(1 - plogis(alpha0 + alpha1*x1[i] + alpha2*x2[i] + alpha12*x1[i]*x2[i] + b[i]))
+  }
+  return(R)
+}
+
+seed <- function(nchain,burnin, prop_sd,r,n,x1,x2, init,b,init_b,N) {
+  chain <- matrix(NA, nchain + 1,length(hyper_param))
+  chain_b <- matrix(NA, nchain +1,N)
+  chain[1,] <- init
+  chain_b[1,] <- init_b
+  
+  alpha0 <- chain[1, 1]
+  alpha1 <- chain[1, 2]
+  alpha2 <- chain[1, 3]
+  alpha12 <- chain[1, 4]
+  sigma <- chain[1, 5]
+  
+  b <- chain_b[1,]
+  
+  for (i in 1:nchain){
+    #maj alpha0
+    prop_alpha0 = rnorm(1,mean=alpha0,sd = prop_sd[1])
+    top_alpha0 <- (-prop_alpha0^2 / (2 * 10^6)) + calcul_r(prop_alpha0,alpha1,alpha12,alpha2,x1,x2,b,r,n,I)
+    bottom_alpha0 <- (-alpha0^2 / (2 * 10^6)) + calcul_r(alpha0,alpha1,alpha12,alpha2,x1,x2,b,r,n,I)
+    acc_prob_alpha0 = exp(top_alpha0 - bottom_alpha0)
+    
+    if (runif(1)< acc_prob_alpha0){
+      alpha0 = prop_alpha0
+    }
+    chain[i+1,1] = alpha0
+    
+    #maj alpha1
+    prop_alpha1 = rnorm(1,alpha1,prop_sd[2])
+    top_alpha1 <- (-prop_alpha1^2 / (2 * 10^6)) + calcul_r(alpha0,prop_alpha1,alpha12,alpha2,x1,x2,b,r,n,I)
+    bottom_alpha1 <- (-alpha1^2 / (2 * 10^6)) + calcul_r(alpha0,alpha1,alpha12,alpha2,x1,x2,b,r,n,I)
+    acc_prob_alpha1 = exp(top_alpha1 - bottom_alpha1)
+    
+    if (runif(1)< acc_prob_alpha1){
+      alpha1 = prop_alpha1
+    }
+    chain[i+1,2] = alpha1
+    
+    #maj alpha2
+    prop_alpha2 = rnorm(1,alpha2,prop_sd[3])
+    top_alpha2 <- (-prop_alpha2^2 / (2 * 10^6)) + calcul_r(alpha0,alpha1,alpha12,prop_alpha2,x1,x2,b,r,n,I)
+    bottom_alpha2 <- (-alpha2^2 / (2 * 10^6)) + calcul_r(alpha0,alpha1,alpha12,alpha2,x1,x2,b,r,n,I)
+    acc_prob_alpha2 = exp(top_alpha2 - bottom_alpha2)
+    
+    if (runif(1)< acc_prob_alpha2){
+      alpha2 = prop_alpha2
+    }
+    chain[i+1,3] = alpha2    
+    
+    #maj alpha12
+    prop_alpha12 = rnorm(1,alpha12,prop_sd[4])
+    top_alpha12 <- (-prop_alpha12^2 / (2 * 10^6)) + calcul_r(alpha0,alpha1,prop_alpha12,alpha2,x1,x2,b,r,n,I)
+    bottom_alpha12 <- (-alpha12^2 / (2 * 10^6)) + calcul_r(alpha0,alpha1,alpha12,alpha2,x1,x2,b,r,n,I)
+    acc_prob_alpha12 = exp(top_alpha12 - bottom_alpha12)
+    
+    if (runif(1)< acc_prob_alpha12){
+      alpha12 = prop_alpha12
+    }
+    chain[i+1,4] = alpha12
+    
+
+    
+    for (j in 1:N){
+      #maj b
+      prop_b = rnorm(1,b[j],prop_sd[5])
+      
+      top_b <- -(prop_b^2 / (2 * sigma^2)) + r[j] * log(plogis(alpha0 + alpha1*x1[j] + alpha2*x2[j] + alpha12*x1[j]*x2[j] + prop_b)) + 
+        (n[j] - r[j])*log(1 - plogis(alpha0 + alpha1*x1[j] + alpha2*x2[j] + alpha12*x1[j]*x2[j] + prop_b))
+      bottom_b <- -(b[j]^2 / (2 * sigma^2)) + r[j] * log(plogis(alpha0 + alpha1*x1[j] + alpha2*x2[j] + alpha12*x1[j]*x2[j] + b[j])) + 
+        (n[j] - r[j])*log(1 - plogis(alpha0 + alpha1*x1[j] + alpha2*x2[j] + alpha12*x1[j]*x2[j] + b[j]))
+      
+      acc_prob_b = exp(top_b - bottom_b)
+      
+      if (runif(1)< acc_prob_b){
+        b[j] = prop_b
+      }
+      chain_b[i+1,] = b
+      
+    }
+    
+    #maj sigma
+    shape_cond <- 0.001 + 0.5 * I  
+    rate_cond <- 0.001 + 0.5 * sum(b^2)
+    tau = rgamma(1, shape = shape_cond, scale = rate_cond)
+    sigma2 <- 1 / sqrt(tau)
+    
+    chain[i+1,5] <- sigma2 
+    
+  }
+  
+
+  chain <- chain[burnin:nrow(chain), ]
+  
+  chain_b <- chain_b[burnin:nrow(chain), ]
+  
+  return(list(chain = chain, chain_b = chain_b))
+}
+
+nchain <- 10000
+prop_sd <- c(1,1,1,1,1)
+init <- c(alpha0, alpha1,alpha12,alpha2,sigma)
+init_b <- b
+
+results <- seed(nchain, 1000, prop_sd,r,n,x1,x2,init,b,init_b,I)

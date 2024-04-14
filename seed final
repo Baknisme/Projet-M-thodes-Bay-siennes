@@ -8,6 +8,7 @@ b <- c(0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
        0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
        0)
 
+
 hyper_param = c("alpha0","alpha1","alpha2","alpha12","sigma")
 
 "I" <- 

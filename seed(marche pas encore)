@@ -60,7 +60,7 @@ seed <- function(nchain,burnin, prop_sd,r,n,x1,x2, init,b,init_b,N) {
     prop_alpha0=exp(prop_alpha00)
     top_alpha0 <- (-prop_alpha0^2 / (2 * 10^6)) + sum(new_R * log(prop_alpha0) + (n-new_R) * log(1-new_p))
     bottom_alpha0 <- (-alpha0^2 / (2 * 10^6)) + sum(R * log(chain[i,1]) + (n-R) * log(1-p))
-    print(top_alpha0)
+   
     acc_prob_alpha0 = min(1,exp(top_alpha0 - bottom_alpha0)*(prop_alpha0/chain[i,1]))
 
     if (runif(1)< acc_prob_alpha0){
@@ -116,15 +116,17 @@ seed <- function(nchain,burnin, prop_sd,r,n,x1,x2, init,b,init_b,N) {
     
     for (j in 1:N){
       #maj b
-      prop_b = rnorm(1,chain_b[i,j],prop_sd[5])
-      new_p <- sigmoid(chain[i,1] + chain[i,2] * x1 + chain[i,3] * x2 + chain[i,4] * x1 * x2 + prop_b)
-      new_R <- sum(dbinom(r[j], size = n[j], prob = new_p, log = TRUE))
+      p_j <- sigmoid(chain[i, 1] + chain[i, 2] * x1[j] + chain[i, 3] * x2[j] + chain[i, 4] * x1[j] * x2[j] + chain_b[i, j])
+      prop_b_j <- rnorm(1, mean = chain_b[i, j], sd = prop_sd[5])
+      new_p_j <- sigmoid(chain[i, 1] + chain[i, 2] * x1[j] + chain[i, 3] * x2[j] + chain[i, 4] * x1[j] * x2[j] + prop_b_j)
+      R<-dbinom(r[j], size = n[j], prob = p_j, log = TRUE)
+      new_R <- (dbinom(r[j], size = n[j], prob = new_p_j, log = TRUE))
       
-      top_b <- -(prop_b^2 / (2 * sigma^2)) + new_R * log(new_p) + (n-new_R)*log(1-new_p)
-      bottom_b <- -(chain_b[i,j]^2 / (2 * sigma^2)) + R * log(p) + (n-R)*log(1-p)
+      top_b <- -(prop_b_j^2 / (2 * sigma^2)) + new_R * log(new_p_j) + (n[j]-new_R)*log(1-new_p_j)
+      bottom_b <- -(chain_b[i,j]^2 / (2 * sigma^2)) + R * log(p_j) + (n[j]-R)*log(1-p_j)
       acc_prob_b = exp(top_b - bottom_b)
-      if (runif(1)< acc_prob_b[j]){
-        b[j] = prop_b
+      if (runif(1)< acc_prob_b){
+        b[j] = prop_b_j
       }
       chain_b[i+1,] = b
       
